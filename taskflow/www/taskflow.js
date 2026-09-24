@@ -978,9 +978,29 @@ function getColumnCount() {
 			console.log("[Download] filtered:", filtered.length, "team:", teamVal, "project:", projVal, "status:", statusVal, "from:", fromVal, "to:", toVal);
 			return filtered;
 		}
-		function updateDownloadPopupInfo() {
+		async function updateDownloadPopupInfo() {
 			if (!downloadPopupInfo) return;
-			if (lastBulkInsertResult && !document.getElementById("downloadTeamFilter")?.value && !document.getElementById("downloadProjectFilter")?.value && !document.getElementById("downloadStatusFilter")?.value && !document.getElementById("downloadFromDate")?.value && !document.getElementById("downloadToDate")?.value) {
+			const teamVal = document.getElementById("downloadTeamFilter")?.value || "";
+			const projVal = document.getElementById("downloadProjectFilter")?.value || "";
+			const statusVal = document.getElementById("downloadStatusFilter")?.value || "";
+			const fromVal = document.getElementById("downloadFromDate")?.value || "";
+			const toVal = document.getElementById("downloadToDate")?.value || "";
+			// If Status/From/To empty and no team/project filter, show all tasks count from server
+			try {
+				const tasks = await apiCall("get_tasks_for_export", { team: teamVal, project: projVal, status: statusVal, from_date: fromVal, to_date: toVal });
+				const count = Array.isArray(tasks) ? tasks.length : 0;
+				if (lastBulkInsertResult && !teamVal && !projVal && !statusVal && !fromVal && !toVal) {
+					const c = lastBulkInsertResult.created_count ?? (lastBulkInsertResult.created_tasks?.length || 0);
+					const e = lastBulkInsertResult.error_count ?? (lastBulkInsertResult.errors?.length || 0);
+					downloadPopupInfo.innerHTML = `<b>${c} created</b> • <b>${e} errors</b> — Bulk Insert results<br><span style="font-size:11px;color:#64748b;">Filtered tasks: ${count} (all when Status/From/To empty)</span>`;
+				} else {
+					downloadPopupInfo.innerHTML = `<b>${count} tasks</b> matched filters<br><span style="font-size:11px;color:#64748b;">Will be exported as CSV (every status when Status empty)</span>`;
+				}
+				return;
+			} catch (e) {
+				// fallback to client
+			}
+			if (lastBulkInsertResult && !teamVal && !projVal && !statusVal && !fromVal && !toVal) {
 				const c = lastBulkInsertResult.created_count ?? (lastBulkInsertResult.created_tasks?.length || 0);
 				const e = lastBulkInsertResult.error_count ?? (lastBulkInsertResult.errors?.length || 0);
 				downloadPopupInfo.innerHTML = `<b>${c} created</b> • <b>${e} errors</b> — Bulk Insert results<br><span style="font-size:11px;color:#64748b;">Filtered tasks: ${getFilteredTasksForDownload().length}</span>`;
@@ -989,13 +1009,13 @@ function getColumnCount() {
 				downloadPopupInfo.innerHTML = `<b>${filtered.length} tasks</b> matched filters<br><span style="font-size:11px;color:#64748b;">Will be exported as CSV</span>`;
 			}
 		}
-		function openDownloadPopup() {
+		async function openDownloadPopup() {
 			if (!downloadPopupModal || !downloadPopupInfo) {
 				downloadBulkResults();
 				return;
 			}
 			populateDownloadFilters();
-			updateDownloadPopupInfo();
+			await updateDownloadPopupInfo();
 			downloadPopupModal.classList.add("open");
 		}
 		function closeDownloadPopup() {
@@ -1029,11 +1049,80 @@ function getColumnCount() {
 			}
 		}
 
-		function downloadBulkResults() {
+		async function downloadBulkResults() {
+			const teamVal = document.getElementById("downloadTeamFilter")?.value || "";
+			const projVal = document.getElementById("downloadProjectFilter")?.value || "";
+			const statusVal = document.getElementById("downloadStatusFilter")?.value || "";
+			const fromVal = document.getElementById("downloadFromDate")?.value || "";
+			const toVal = document.getElementById("downloadToDate")?.value || "";
+			const hasFilter = !!(teamVal || projVal || statusVal || fromVal || toVal);
 			const isPopupOpen = downloadPopupModal?.classList.contains("open");
-			const hasFilter = !!(document.getElementById("downloadTeamFilter")?.value || document.getElementById("downloadProjectFilter")?.value || document.getElementById("downloadStatusFilter")?.value || document.getElementById("downloadFromDate")?.value || document.getElementById("downloadToDate")?.value);
-			// If popup is open, always download filtered tasks (all when Status/From/To empty => every status, all tasks)
-			if (isPopupOpen || hasFilter || !lastBulkInsertResult) {
+			// If no filter and we have bulk result and popup not open, download bulk results
+			if (lastBulkInsertResult && !hasFilter && !isPopupOpen) {
+				const data = lastBulkInsertResult;
+				const rows = [["Task Name", "Status", "Message"]];
+				if (Array.isArray(data.created_tasks)) {
+					data.created_tasks.forEach((name) => rows.push([name, "Created", "Success"]));
+				}
+				if (Array.isArray(data.errors)) {
+					data.errors.forEach((err) => rows.push(["", "Error", err]));
+				}
+				if (rows.length === 1) {
+					rows.push(["No data", "", data.message || ""]);
+				}
+				const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+				const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+				const url = URL.createObjectURL(blob);
+				const a = document.createElement("a");
+				a.href = url;
+				a.download = `bulk_insert_results_${new Date().toISOString().slice(0, 10)}.csv`;
+				a.style.display = "none";
+				document.body.appendChild(a);
+				a.click();
+				document.body.removeChild(a);
+				URL.revokeObjectURL(url);
+				return;
+			}
+			// Otherwise fetch all matching tasks from server (handles 356 tasks, every status when Status/From/To empty)
+			try {
+				const tasks = await apiCall("get_tasks_for_export", {
+					team: teamVal,
+					project: projVal,
+					status: statusVal,
+					from_date: fromVal,
+					to_date: toVal,
+				});
+				const list = Array.isArray(tasks) ? tasks : (tasks && tasks.message ? tasks.message : []);
+				if (!list || !list.length) {
+					if (typeof frappe !== "undefined" && frappe.show_alert) frappe.show_alert({ message: "No tasks match filters (0 tasks)", indicator: "orange" }, 3);
+					return;
+				}
+				const headers = ["task_title", "project", "team", "status", "priority", "task_type", "assigned_to", "start_date", "due_date", "description"];
+				const rows = [headers];
+				list.forEach((t) => {
+					rows.push(headers.map((h) => {
+						let v = t[h] ?? "";
+						if (Array.isArray(v)) v = v.join(";");
+						if (v && typeof v === "object") v = JSON.stringify(v);
+						return String(v).replace(/"/g, '""');
+					}));
+				});
+				const csv = rows.map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
+				const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+				const url = URL.createObjectURL(blob);
+				const a = document.createElement("a");
+				a.href = url;
+				a.download = `tasks_export_${new Date().toISOString().slice(0, 10)}.csv`;
+				a.style.display = "none";
+				document.body.appendChild(a);
+				a.click();
+				document.body.removeChild(a);
+				URL.revokeObjectURL(url);
+				if (typeof frappe !== "undefined" && frappe.show_alert) frappe.show_alert({ message: `Downloaded ${list.length} tasks`, indicator: "green" }, 3);
+				return;
+			} catch (e) {
+				console.error("Export failed, falling back to client filter", e);
+				// fallback to client-side
 				const tasks = getFilteredTasksForDownload();
 				if (!tasks.length) {
 					if (typeof frappe !== "undefined" && frappe.show_alert) frappe.show_alert({ message: "No tasks match filters", indicator: "orange" }, 3);
@@ -1060,32 +1149,6 @@ function getColumnCount() {
 				a.click();
 				document.body.removeChild(a);
 				URL.revokeObjectURL(url);
-				return;
-			}
-			if (lastBulkInsertResult) {
-				const data = lastBulkInsertResult;
-				const rows = [["Task Name", "Status", "Message"]];
-				if (Array.isArray(data.created_tasks)) {
-					data.created_tasks.forEach((name) => rows.push([name, "Created", "Success"]));
-				}
-				if (Array.isArray(data.errors)) {
-					data.errors.forEach((err) => rows.push(["", "Error", err]));
-				}
-				if (rows.length === 1) {
-					rows.push(["No data", "", data.message || ""]);
-				}
-				const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-				const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-				const url = URL.createObjectURL(blob);
-				const a = document.createElement("a");
-				a.href = url;
-				a.download = `bulk_insert_results_${new Date().toISOString().slice(0, 10)}.csv`;
-				a.style.display = "none";
-				document.body.appendChild(a);
-				a.click();
-				document.body.removeChild(a);
-				URL.revokeObjectURL(url);
-				return;
 			}
 		}
 
