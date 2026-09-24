@@ -900,6 +900,7 @@ function getColumnCount() {
 		const bulkUploadError = document.getElementById("bulkUploadError");
 		const bulkErrorMessage = document.getElementById("bulkErrorMessage");
 		let selectedBulkFile = null;
+		let lastBulkInsertResult = null;
 
 		function openBulkInsertModal() {
 			if (bulkInsertModal) {
@@ -926,6 +927,62 @@ function getColumnCount() {
 				bulkUploadArea.style.borderColor = "#cbd5e1";
 				bulkUploadArea.style.background = "#f8fafc";
 			}
+		}
+
+		function downloadBulkResults() {
+			if (lastBulkInsertResult) {
+				const data = lastBulkInsertResult;
+				const rows = [["Task Name", "Status", "Message"]];
+				if (Array.isArray(data.created_tasks)) {
+					data.created_tasks.forEach((name) => rows.push([name, "Created", "Success"]));
+				}
+				if (Array.isArray(data.errors)) {
+					data.errors.forEach((err) => rows.push(["", "Error", err]));
+				}
+				if (rows.length === 1) {
+					rows.push(["No data", "", data.message || ""]);
+				}
+				const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+				const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+				const url = URL.createObjectURL(blob);
+				const a = document.createElement("a");
+				a.href = url;
+				a.download = `bulk_insert_results_${new Date().toISOString().slice(0, 10)}.csv`;
+				a.style.display = "none";
+				document.body.appendChild(a);
+				a.click();
+				document.body.removeChild(a);
+				URL.revokeObjectURL(url);
+				return;
+			}
+			// Fallback: download current tasks in view as CSV (Download only without bulk insert)
+			const tasks = (state.currentTasks && state.currentTasks.length ? state.currentTasks : (state.projectWorkspace && state.projectWorkspace.tasks) || []);
+			if (!tasks.length) {
+				// fallback to template
+				document.getElementById("bulkGetTemplate")?.click();
+				return;
+			}
+			const headers = ["task_title", "project", "team", "status", "priority", "task_type", "assigned_to", "start_date", "due_date", "description"];
+			const rows = [headers];
+			tasks.forEach((t) => {
+				rows.push(headers.map((h) => {
+					let v = t[h] ?? t[h.replace("task_title","task_title")] ?? "";
+					if (Array.isArray(v)) v = v.join(";");
+					if (v && typeof v === "object") v = JSON.stringify(v);
+					return String(v).replace(/"/g, '""');
+				}));
+			});
+			const csv = rows.map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
+			const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement("a");
+			a.href = url;
+			a.download = `tasks_export_${new Date().toISOString().slice(0, 10)}.csv`;
+			a.style.display = "none";
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+			URL.revokeObjectURL(url);
 		}
 
 		function formatFileSize(bytes) {
@@ -996,13 +1053,18 @@ function getColumnCount() {
 			xhr.onload = function () {
 				if (xhr.status === 200) {
 					const response = JSON.parse(xhr.responseText);
-					if (response.message) {
-						closeBulkInsertModal();
-						if (typeof frappe !== "undefined" && frappe.show_alert) {
-							frappe.show_alert({ message: response.message, indicator: "green" }, 5);
-						}
-						refreshView();
+					const result = response.message;
+					if (result && typeof result === "object") {
+						lastBulkInsertResult = result;
+					} else {
+						lastBulkInsertResult = { message: result, created_tasks: [], errors: [] };
 					}
+					const msgText = lastBulkInsertResult.message || "Bulk insert completed";
+					closeBulkInsertModal();
+					if (typeof frappe !== "undefined" && frappe.show_alert) {
+						frappe.show_alert({ message: typeof msgText === "string" ? msgText : JSON.stringify(msgText), indicator: "green" }, 5);
+					}
+					refreshView();
 				} else {
 					let errMsg = "Upload failed. Please try again.";
 					try {
@@ -1023,6 +1085,12 @@ function getColumnCount() {
 		document.querySelector("[data-bulk-insert-button]")?.addEventListener("click", (e) => {
 			e.stopPropagation();
 			openBulkInsertModal();
+		});
+
+		// Standalone Download button (visible always in toolbar) — Download only
+		document.querySelector("[data-download-button]")?.addEventListener("click", (e) => {
+			e.stopPropagation();
+			downloadBulkResults();
 		});
 
 		bulkUploadArea?.addEventListener("click", () => bulkFileInput?.click());
