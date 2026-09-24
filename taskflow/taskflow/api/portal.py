@@ -542,7 +542,7 @@ def get_portal_bootstrap() -> dict:
         fields=_TASK_FIELDS,
         filters={"project": ["in", project_names]} if project_names else {"name": "__missing__"},
         order_by="modified desc",
-        limit_page_length=100,
+        limit_page_length=500,
     )
 
     task_docs = [frappe.get_doc("Taskflow Task", task.name) for task in tasks]
@@ -1744,6 +1744,52 @@ def get_assigned_tasks(user_id: str | None = None, project: str | None = None, t
         _serialize_task(task_doc, project_map, task_user_image_map, task_employee_name_map)
         for task_doc in task_docs
     ]
+
+
+@frappe.whitelist()
+def get_tasks_for_export(team: str | None = None, project: str | None = None, status: str | None = None, from_date: str | None = None, to_date: str | None = None) -> list[dict]:
+    """Return all tasks matching filters for export (no pagination, respects visibility)."""
+    _require_login()
+    filters: dict = {}
+    if team and team != "all" and team != "":
+        filters["team"] = team
+    if project and project != "all" and project != "":
+        filters["project"] = project
+    if status and status != "all" and status != "":
+        filters["status"] = status
+    if from_date and to_date:
+        filters["due_date"] = ["between", [from_date, to_date]]
+    elif from_date:
+        filters["due_date"] = [">=", from_date]
+    elif to_date:
+        filters["due_date"] = ["<=", to_date]
+
+    visible_projects = _get_visible_project_names()
+    if visible_projects:
+        if "project" in filters:
+            # Intersect with visible
+            if isinstance(filters["project"], list) and filters["project"][0] == "in":
+                allowed = set(visible_projects) & set(filters["project"][1])
+                if not allowed:
+                    return []
+                filters["project"] = ["in", list(allowed)]
+            elif isinstance(filters["project"], str):
+                if filters["project"] not in visible_projects:
+                    return []
+        else:
+            # No project filter, limit to visible projects
+            filters["project"] = ["in", visible_projects]
+    else:
+        if "project" not in filters:
+            filters["project"] = ["in", ["__missing__"]]
+
+    tasks = frappe.get_list("Taskflow Task", fields=_TASK_FIELDS, filters=filters, order_by="modified desc", limit_page_length=0, ignore_permissions=True)
+    task_docs = [frappe.get_doc("Taskflow Task", task.name) for task in tasks]
+    project_names = list({task.project for task in task_docs if task.project})
+    project_map = {p: frappe.db.get_value("Taskflow Project", p, "project_name") or p for p in project_names}
+    task_employee_name_map = _bulk_employee_names([task.assigned_to for task in task_docs if task.assigned_to])
+    task_user_image_map = _bulk_user_images([task.assigned_to_user for task in task_docs if task.assigned_to_user])
+    return [_serialize_task(task_doc, project_map, task_user_image_map, task_employee_name_map) for task_doc in task_docs]
 
 
 @frappe.whitelist(methods=["GET"])
