@@ -1829,6 +1829,24 @@
 	</div>
 </div>
 
+<!-- Download Popup Modal -->
+<div id="downloadPopupModal" class="taskflow-modal-backdrop">
+	<div class="taskflow-modal" style="max-width: 420px; width: 100%;">
+		<div class="taskflow-modal-header">
+			<h3 style="margin:0; font-size:16px; font-weight:600;">Download Tasks</h3>
+			<button class="taskflow-modal-close" data-close-modal="downloadPopupModal">&times;</button>
+		</div>
+		<div class="taskflow-modal-body">
+			<p style="margin:0 0 12px; color:#475569; font-size:13px;">Ready to download:</p>
+			<div id="downloadPopupInfo" style="padding:12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; font-size:13px; color:#334155; text-align:center;"></div>
+		</div>
+		<div class="taskflow-modal-footer">
+			<button class="taskflow-btn-cancel" data-close-modal="downloadPopupModal">Cancel</button>
+			<button id="downloadPopupConfirmBtn" class="taskflow-btn-primary" style="background:#16a34a; border-color:#16a34a;">📥 Download</button>
+		</div>
+	</div>
+</div>
+
 <script>
 	window.csrf_token = window.csrf_token || "{{ csrf_token }}";
 </script>
