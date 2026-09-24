@@ -2043,8 +2043,37 @@ function getColumnCount() {
 
 		const colors = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"];
 
-		refs.projectList.innerHTML = projects
-			.map((project, idx) => {
+		// Build parent -> children map for hierarchical display
+		const projectMap = new Map(projects.map((p) => [p.name, p]));
+		const childrenMap = new Map();
+		const roots = [];
+		projects.forEach((p) => {
+			const parent = p.parent_project;
+			if (parent && projectMap.has(parent)) {
+				if (!childrenMap.has(parent)) childrenMap.set(parent, []);
+				childrenMap.get(parent).push(p);
+			} else {
+				roots.push(p);
+			}
+		});
+		const sortFn = (a, b) => {
+			const pendingA = a.open_tasks || 0;
+			const pendingB = b.open_tasks || 0;
+			if (pendingB !== pendingA) return pendingB - pendingA;
+			return (a.project_name || "").localeCompare(b.project_name || "");
+		};
+		roots.sort(sortFn);
+		childrenMap.forEach((list) => list.sort(sortFn));
+		const flat = [];
+		function addWithIndent(proj, depth) {
+			flat.push({ project: proj, depth });
+			const children = childrenMap.get(proj.name) || [];
+			children.forEach((child) => addWithIndent(child, depth + 1));
+		}
+		roots.forEach((r) => addWithIndent(r, 0));
+
+		refs.projectList.innerHTML = flat
+			.map(({ project, depth }, idx) => {
 				const activeClass =
 					state.navMode === "dashboard" && project.name === state.selectedProject
 						? "active"
@@ -2052,10 +2081,13 @@ function getColumnCount() {
 				const color = colors[idx % colors.length];
 				const initialsStr = initials(project.project_name);
 				const pendingCount = project.open_tasks || 0;
+				const indent = depth * 18;
+				const prefix = depth > 0 ? "↳ " : "";
+				const parentHint = depth > 0 ? ` (child of ${escapeHtml(project.parent_project)})` : "";
 				return `
-					<div class="taskflow-project-item ${activeClass}" data-project-select="${escapeHtml(project.name)}" role="button" tabindex="0">
-						<div class="taskflow-project-icon" style="background: ${color}">${initialsStr}</div>
-						<span class="taskflow-project-name">${escapeHtml(project.project_name || project.name)}</span>
+					<div class="taskflow-project-item ${activeClass}" data-project-select="${escapeHtml(project.name)}" role="button" tabindex="0" style="margin-left:${indent}px; ${depth>0 ? 'border-left:2px solid #e2e8f0; padding-left:8px;' : ''}" title="${escapeHtml(project.project_name || project.name)}${parentHint}">
+						<div class="taskflow-project-icon" style="background: ${color}; ${depth>0 ? 'width:28px; height:28px; font-size:10px;' : ''}">${initialsStr}</div>
+						<span class="taskflow-project-name">${prefix}${escapeHtml(project.project_name || project.name)}</span>
 						${pendingCount > 0 ? `<span class="taskflow-badge">${pendingCount}</span>` : ""}
 					</div>
 				`;
