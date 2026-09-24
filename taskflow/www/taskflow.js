@@ -899,8 +899,30 @@ function getColumnCount() {
 		const bulkUploadPercent = document.getElementById("bulkUploadPercent");
 		const bulkUploadError = document.getElementById("bulkUploadError");
 		const bulkErrorMessage = document.getElementById("bulkErrorMessage");
+		const downloadPopupModal = document.getElementById("downloadPopupModal");
+		const downloadPopupInfo = document.getElementById("downloadPopupInfo");
+		const downloadPopupConfirmBtn = document.getElementById("downloadPopupConfirmBtn");
 		let selectedBulkFile = null;
 		let lastBulkInsertResult = null;
+
+		function openDownloadPopup() {
+			if (!downloadPopupModal || !downloadPopupInfo) {
+				downloadBulkResults();
+				return;
+			}
+			if (lastBulkInsertResult) {
+				const c = lastBulkInsertResult.created_count ?? (lastBulkInsertResult.created_tasks?.length || 0);
+				const e = lastBulkInsertResult.error_count ?? (lastBulkInsertResult.errors?.length || 0);
+				downloadPopupInfo.innerHTML = `<b>${c} created</b> • <b>${e} errors</b><br><span style="font-size:12px;color:#64748b;">Bulk Insert results will be downloaded as CSV</span>`;
+			} else {
+				const tasks = (state.currentTasks?.length ? state.currentTasks : (state.projectWorkspace?.tasks || []));
+				downloadPopupInfo.innerHTML = `<b>${tasks.length} tasks</b> in current view<br><span style="font-size:12px;color:#64748b;">Will be exported as CSV</span>`;
+			}
+			downloadPopupModal.classList.add("open");
+		}
+		function closeDownloadPopup() {
+			downloadPopupModal?.classList.remove("open");
+		}
 
 		function openBulkInsertModal() {
 			if (bulkInsertModal) {
@@ -1087,10 +1109,20 @@ function getColumnCount() {
 			openBulkInsertModal();
 		});
 
-		// Standalone Download button (visible always in toolbar) — Download only
+		// Standalone Download button (visible always in toolbar) — Download only -> show popup
 		document.querySelector("[data-download-button]")?.addEventListener("click", (e) => {
 			e.stopPropagation();
+			openDownloadPopup();
+		});
+		downloadPopupConfirmBtn?.addEventListener("click", () => {
 			downloadBulkResults();
+			closeDownloadPopup();
+		});
+		document.querySelectorAll('[data-close-modal="downloadPopupModal"]').forEach((btn) => {
+			btn.addEventListener("click", closeDownloadPopup);
+		});
+		downloadPopupModal?.addEventListener("click", (e) => {
+			if (e.target === downloadPopupModal) closeDownloadPopup();
 		});
 
 		bulkUploadArea?.addEventListener("click", () => bulkFileInput?.click());
