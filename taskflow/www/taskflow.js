@@ -2292,12 +2292,26 @@ function getColumnCount() {
 		const completedTasks = project.completed_tasks || 0;
 		const pendingCount = Math.max(totalTasks - completedTasks, 0);
 
-		refs.projectTitle.innerHTML = `
-			${escapeHtml(project.project_name)}
-			<span style="font-size: 20px; font-weight: 800; margin-left: 12px;">
-				<span style="color: #ef4444;">${pendingCount}</span> / ${totalTasks}
-			</span>
-		`;
+		// Child project: show "Parent / Child x/y" in taskflow-project-info, only for child condition
+		let titleHtml;
+		if (project.parent_project) {
+			const parentProj = state.bootstrap && state.bootstrap.projects.find((p) => p.name === project.parent_project);
+			const parentName = parentProj ? parentProj.project_name : project.parent_project;
+			titleHtml = `
+				${escapeHtml(parentName)} / ${escapeHtml(project.project_name)}
+				<span style="font-size: 20px; font-weight: 800; margin-left: 12px;">
+					<span style="color: #ef4444;">${pendingCount}</span> / ${totalTasks}
+				</span>
+			`;
+		} else {
+			titleHtml = `
+				${escapeHtml(project.project_name)}
+				<span style="font-size: 20px; font-weight: 800; margin-left: 12px;">
+					<span style="color: #ef4444;">${pendingCount}</span> / ${totalTasks}
+				</span>
+			`;
+		}
+		refs.projectTitle.innerHTML = titleHtml;
 
 		renderKpiCards(tasks, project.status_counts);
 		if (breadcrumb) breadcrumb.textContent = project.project_name;
