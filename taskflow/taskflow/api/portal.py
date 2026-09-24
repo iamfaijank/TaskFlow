@@ -636,17 +636,22 @@ def get_project_workspace(project: str, start: int = 0, page_length: int = 20) -
     start = int(start or 0)
     page_length = int(page_length or 20)
 
+    # Parent project: include all child project tasks as well
+    child_projects = frappe.get_all("Taskflow Project", filters={"parent_project": project}, fields=["name", "project_name"])
+    project_list = [project] + [c.name for c in child_projects]
+    project_filter = {"project": ["in", project_list]} if len(project_list) > 1 else {"project": project}
+
     tasks = frappe.get_list(
         "Taskflow Task",
         fields=_TASK_FIELDS,
-        filters={"project": project},
+        filters=project_filter,
         order_by="sequence asc, modified desc",
         start=start,
         limit_page_length=page_length,
     )
     task_docs = [frappe.get_doc("Taskflow Task", task.name) for task in tasks]
     total = len(
-        frappe.get_list("Taskflow Task", filters={"project": project}, pluck="name", limit_page_length=0)
+        frappe.get_list("Taskflow Task", filters=project_filter, pluck="name", limit_page_length=0)
     )
 
     task_employee_name_map = _bulk_employee_names([task.assigned_to for task in tasks if task.assigned_to])
@@ -670,6 +675,10 @@ def get_project_workspace(project: str, start: int = 0, page_length: int = 20) -
         for member in project_members
     ]
 
+    # Hierarchical titles: child tasks show "Parent / Child"
+    project_map_hier = {project_doc.name: project_doc.project_name}
+    for c in child_projects:
+        project_map_hier[c.name] = f"{project_doc.project_name} / {c.project_name}"
     return {
         "project": _serialize_project(
             project_doc,
@@ -679,7 +688,7 @@ def get_project_workspace(project: str, start: int = 0, page_length: int = 20) -
         "tasks": [
             _serialize_task(
                 task_doc,
-                {project_doc.name: project_doc.project_name},
+                project_map_hier,
                 task_user_image_map,
                 task_employee_name_map,
             )
@@ -1756,7 +1765,12 @@ def get_tasks_for_export(team: str | None = None, project: str | None = None, st
     if team and team != "all" and team != "":
         filters["team"] = team
     if project and project != "all" and project != "":
-        filters["project"] = project
+        # Parent project: include child project tasks as well
+        child_projects = frappe.get_all("Taskflow Project", filters={"parent_project": project}, pluck="name")
+        if child_projects:
+            filters["project"] = ["in", [project] + child_projects]
+        else:
+            filters["project"] = project
     if status and status != "all" and status != "":
         filters["status"] = status
     if from_date and to_date:
@@ -1788,7 +1802,20 @@ def get_tasks_for_export(team: str | None = None, project: str | None = None, st
     tasks = frappe.get_list("Taskflow Task", fields=_TASK_FIELDS, filters=filters, order_by="modified desc", limit_page_length=0, ignore_permissions=True)
     task_docs = [frappe.get_doc("Taskflow Task", task.name) for task in tasks]
     project_names = list({task.project for task in task_docs if task.project})
-    project_map = {p: frappe.db.get_value("Taskflow Project", p, "project_name") or p for p in project_names}
+    # Hierarchical display: if task's project is child, show "Parent / Child"
+    project_map = {}
+    for p in project_names:
+        info = frappe.db.get_value("Taskflow Project", p, ["project_name", "parent_project"], as_dict=True)
+        if info and info.parent_project:
+            # Check if this child belongs to the filtered parent project
+            if project and info.parent_project == project:
+                parent_name = frappe.db.get_value("Taskflow Project", project, "project_name") or project
+                project_map[p] = f"{parent_name} / {info.project_name}"
+            else:
+                parent_name = frappe.db.get_value("Taskflow Project", info.parent_project, "project_name") or info.parent_project
+                project_map[p] = f"{parent_name} / {info.project_name}"
+        else:
+            project_map[p] = info.project_name if info else p
     task_employee_name_map = _bulk_employee_names([task.assigned_to for task in task_docs if task.assigned_to])
     task_user_image_map = _bulk_user_images([task.assigned_to_user for task in task_docs if task.assigned_to_user])
     return [_serialize_task(task_doc, project_map, task_user_image_map, task_employee_name_map) for task_doc in task_docs]
