@@ -1831,14 +1831,50 @@
 
 <!-- Download Popup Modal -->
 <div id="downloadPopupModal" class="taskflow-modal-backdrop">
-	<div class="taskflow-modal" style="max-width: 420px; width: 100%;">
+	<div class="taskflow-modal" style="max-width: 520px; width: 100%;">
 		<div class="taskflow-modal-header">
 			<h3 style="margin:0; font-size:16px; font-weight:600;">Download Tasks</h3>
 			<button class="taskflow-modal-close" data-close-modal="downloadPopupModal">&times;</button>
 		</div>
 		<div class="taskflow-modal-body">
-			<p style="margin:0 0 12px; color:#475569; font-size:13px;">Ready to download:</p>
-			<div id="downloadPopupInfo" style="padding:12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; font-size:13px; color:#334155; text-align:center;"></div>
+			<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+				<div>
+					<label style="display:block; font-size:11px; font-weight:600; color:#475569; margin-bottom:4px;">Team</label>
+					<select id="downloadTeamFilter" style="width:100%; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:13px; background:white;">
+						<option value="">All Teams</option>
+					</select>
+				</div>
+				<div>
+					<label style="display:block; font-size:11px; font-weight:600; color:#475569; margin-bottom:4px;">Project</label>
+					<select id="downloadProjectFilter" style="width:100%; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:13px; background:white;">
+						<option value="">All Projects</option>
+					</select>
+				</div>
+			</div>
+			<div style="margin-bottom: 12px;">
+				<label style="display:block; font-size:11px; font-weight:600; color:#475569; margin-bottom:4px;">Status</label>
+				<select id="downloadStatusFilter" style="width:100%; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:13px; background:white;">
+					<option value="">All Statuses</option>
+					<option value="Open">Open</option>
+					<option value="In Progress">In Progress</option>
+					<option value="Review">Review</option>
+					<option value="On Hold">On Hold</option>
+					<option value="Completed">Completed</option>
+					<option value="Cancelled">Cancelled</option>
+					<option value="Overdue">Overdue</option>
+				</select>
+			</div>
+			<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+				<div>
+					<label style="display:block; font-size:11px; font-weight:600; color:#475569; margin-bottom:4px;">From Date</label>
+					<input type="date" id="downloadFromDate" style="width:100%; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:13px;" />
+				</div>
+				<div>
+					<label style="display:block; font-size:11px; font-weight:600; color:#475569; margin-bottom:4px;">To Date</label>
+					<input type="date" id="downloadToDate" style="width:100%; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:13px;" />
+				</div>
+			</div>
+			<div id="downloadPopupInfo" style="padding:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; font-size:12px; color:#334155; text-align:center;"></div>
 		</div>
 		<div class="taskflow-modal-footer">
 			<button class="taskflow-btn-cancel" data-close-modal="downloadPopupModal">Cancel</button>
