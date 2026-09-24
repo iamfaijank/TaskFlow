@@ -950,13 +950,14 @@ function getColumnCount() {
 			});
 		}
 		function getFilteredTasksForDownload() {
-			let tasks = (state.currentTasks && state.currentTasks.length ? state.currentTasks : (state.projectWorkspace && state.projectWorkspace.tasks) || []);
+			let tasks = (state.currentTasks && state.currentTasks.length ? state.currentTasks : (state.projectWorkspace && state.projectWorkspace.tasks) || (state.bootstrap && state.bootstrap.tasks) || []);
+			console.log("[Download] source tasks:", tasks.length, "currentTasks:", state.currentTasks?.length, "projectWorkspace:", state.projectWorkspace?.tasks?.length, "bootstrap:", state.bootstrap?.tasks?.length);
 			const teamVal = (document.getElementById("downloadTeamFilter")?.value || "").toLowerCase().trim();
 			const projVal = (document.getElementById("downloadProjectFilter")?.value || "").toLowerCase().trim();
 			const statusVal = (document.getElementById("downloadStatusFilter")?.value || "").toLowerCase().trim();
 			const fromVal = document.getElementById("downloadFromDate")?.value || "";
 			const toVal = document.getElementById("downloadToDate")?.value || "";
-			return tasks.filter((t) => {
+			const filtered = tasks.filter((t) => {
 				if (teamVal && !(t.team || "").toLowerCase().includes(teamVal)) return false;
 				if (projVal && !(t.project || "").toLowerCase().includes(projVal) && !(t.project_title || "").toLowerCase().includes(projVal)) return false;
 				if (statusVal && !(t.status || "").toLowerCase().includes(statusVal)) return false;
@@ -966,6 +967,8 @@ function getColumnCount() {
 				if (toVal && dateStr && dateStr > toVal) return false;
 				return true;
 			});
+			console.log("[Download] filtered:", filtered.length, "team:", teamVal, "project:", projVal, "status:", statusVal, "from:", fromVal, "to:", toVal);
+			return filtered;
 		}
 		function updateDownloadPopupInfo() {
 			if (!downloadPopupInfo) return;
@@ -1019,8 +1022,39 @@ function getColumnCount() {
 		}
 
 		function downloadBulkResults() {
+			const isPopupOpen = downloadPopupModal?.classList.contains("open");
 			const hasFilter = !!(document.getElementById("downloadTeamFilter")?.value || document.getElementById("downloadProjectFilter")?.value || document.getElementById("downloadStatusFilter")?.value || document.getElementById("downloadFromDate")?.value || document.getElementById("downloadToDate")?.value);
-			if (lastBulkInsertResult && !hasFilter) {
+			// If popup is open, always download filtered tasks (all when Status/From/To empty => every status, all tasks)
+			if (isPopupOpen || hasFilter || !lastBulkInsertResult) {
+				const tasks = getFilteredTasksForDownload();
+				if (!tasks.length) {
+					if (typeof frappe !== "undefined" && frappe.show_alert) frappe.show_alert({ message: "No tasks match filters", indicator: "orange" }, 3);
+					return;
+				}
+				const headers = ["task_title", "project", "team", "status", "priority", "task_type", "assigned_to", "start_date", "due_date", "description"];
+				const rows = [headers];
+				tasks.forEach((t) => {
+					rows.push(headers.map((h) => {
+						let v = t[h] ?? "";
+						if (Array.isArray(v)) v = v.join(";");
+						if (v && typeof v === "object") v = JSON.stringify(v);
+						return String(v).replace(/"/g, '""');
+					}));
+				});
+				const csv = rows.map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
+				const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+				const url = URL.createObjectURL(blob);
+				const a = document.createElement("a");
+				a.href = url;
+				a.download = `tasks_export_${new Date().toISOString().slice(0, 10)}.csv`;
+				a.style.display = "none";
+				document.body.appendChild(a);
+				a.click();
+				document.body.removeChild(a);
+				URL.revokeObjectURL(url);
+				return;
+			}
+			if (lastBulkInsertResult) {
 				const data = lastBulkInsertResult;
 				const rows = [["Task Name", "Status", "Message"]];
 				if (Array.isArray(data.created_tasks)) {
@@ -1045,34 +1079,6 @@ function getColumnCount() {
 				URL.revokeObjectURL(url);
 				return;
 			}
-			// Filtered download: use filtered tasks
-			const tasks = getFilteredTasksForDownload();
-			if (!tasks.length) {
-				// fallback to template if no tasks match
-				if (typeof frappe !== "undefined" && frappe.show_alert) frappe.show_alert({ message: "No tasks match filters", indicator: "orange" }, 3);
-				return;
-			}
-			const headers = ["task_title", "project", "team", "status", "priority", "task_type", "assigned_to", "start_date", "due_date", "description"];
-			const rows = [headers];
-			tasks.forEach((t) => {
-				rows.push(headers.map((h) => {
-					let v = t[h] ?? "";
-					if (Array.isArray(v)) v = v.join(";");
-					if (v && typeof v === "object") v = JSON.stringify(v);
-					return String(v).replace(/"/g, '""');
-				}));
-			});
-			const csv = rows.map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
-			const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-			const url = URL.createObjectURL(blob);
-			const a = document.createElement("a");
-			a.href = url;
-			a.download = `tasks_export_${new Date().toISOString().slice(0, 10)}.csv`;
-			a.style.display = "none";
-			document.body.appendChild(a);
-			a.click();
-			document.body.removeChild(a);
-			URL.revokeObjectURL(url);
 		}
 
 		function formatFileSize(bytes) {
