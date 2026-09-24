@@ -5542,6 +5542,33 @@ function getColumnCount() {
 				state.projectTaskPage = prevPage;
 				state.projectHasMore = prevHasMore;
 				renderProjectWorkspace();
+				// Preserve scroll to Sr No 45 (task that was opened) instead of resetting to 1
+				if (taskName) {
+					setTimeout(() => {
+						const idx = prevTasks.findIndex((t) => t.name === taskName);
+						const srNo = idx !== -1 ? idx + 1 : null;
+						// Try to find row by task name
+						let row = document.querySelector(`[data-task-name="${taskName}"]`) || document.querySelector(`tr[data-name="${taskName}"]`);
+						if (!row) {
+							// Fallback: find by text content
+							row = [...document.querySelectorAll("tr[data-task], tr[data-name], .taskflow-card")].find((el) => el.textContent.includes(taskName));
+						}
+						if (row) {
+							row.scrollIntoView({ behavior: "smooth", block: "center" });
+							row.style.transition = "background 0.3s";
+							const origBg = row.style.background;
+							row.style.background = "#fef3c7";
+							setTimeout(() => { row.style.background = origBg; }, 1500);
+						} else if (srNo) {
+							const scrollEl = document.querySelector("[data-task-table-scroll]") || document.querySelector(".taskflow-super-table-scroll") || document.querySelector("[data-list-view]") || document.querySelector(".taskflow-list-view");
+							if (scrollEl) {
+								// LIST_ROW_HEIGHT = 48, header ~ 40
+								scrollEl.scrollTop = Math.max(0, (srNo - 3) * 48);
+							}
+						}
+						// Also update URL to keep task param for Sr No reference? No, keep clean
+					}, 200);
+				}
 			} else {
 				await loadStateFromUrl({ updateUrl: false });
 			}
