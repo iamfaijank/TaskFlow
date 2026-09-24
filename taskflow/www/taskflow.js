@@ -906,6 +906,7 @@ function getColumnCount() {
 		let lastBulkInsertResult = null;
 
 		const DOWNLOAD_STATUS_OPTIONS = ["Open","In Progress","Review","On Hold","Completed","Cancelled","Overdue"];
+		let _projDisplayToName = new Map();
 		function initCustomSearchDropdown(inputId, dropdownId, getOptions) {
 			const input = document.getElementById(inputId);
 			const dropdown = document.getElementById(dropdownId);
@@ -924,7 +925,6 @@ function getColumnCount() {
 							updateDownloadPopupInfo();
 						});
 					});
-					// highlight selected
 					dropdown.querySelectorAll(".custom-dropdown-item").forEach((el) => {
 						if (el.dataset.value === input.value) el.classList.add("selected");
 					});
@@ -938,11 +938,24 @@ function getColumnCount() {
 			const teams = (state.bootstrap && state.bootstrap.teams) || [];
 			const teamNames = [...new Set(teams.map((t) => t.name).concat(teams.map((t) => t.team_name).filter(Boolean)).filter(Boolean))];
 			const projs = (state.bootstrap && state.bootstrap.projects) || [];
-			const projNames = [...new Set(projs.map((p) => p.name).concat(projs.map((p) => p.project_name).filter(Boolean)).filter(Boolean))];
+			_projDisplayToName = new Map();
+			const projDisplays = [];
+			projs.forEach((p) => {
+				let display = p.project_name;
+				if (p.parent_project) {
+					const parent = projs.find((pp) => pp.name === p.parent_project);
+					const parentName = parent ? parent.project_name : p.parent_project;
+					display = `${parentName} / ${p.project_name}`;
+				}
+				_projDisplayToName.set(display, p.name);
+				_projDisplayToName.set(p.name, p.name);
+				_projDisplayToName.set(p.project_name, p.name);
+				projDisplays.push(display);
+			});
+			const uniqProjDisplays = [...new Set(projDisplays)];
 			initCustomSearchDropdown("downloadTeamFilter", "downloadTeamDropdown", () => teamNames);
-			initCustomSearchDropdown("downloadProjectFilter", "downloadProjectDropdown", () => projNames);
+			initCustomSearchDropdown("downloadProjectFilter", "downloadProjectDropdown", () => uniqProjDisplays);
 			initCustomSearchDropdown("downloadStatusFilter", "downloadStatusDropdown", () => DOWNLOAD_STATUS_OPTIONS);
-			// close dropdowns on outside click
 			document.addEventListener("click", (e) => {
 				if (!e.target.closest(".custom-select-wrapper")) {
 					document.querySelectorAll(".custom-dropdown.open").forEach((d) => d.classList.remove("open"));
@@ -961,13 +974,26 @@ function getColumnCount() {
 			if (allTasksMap.size > tasks.length) tasks = Array.from(allTasksMap.values());
 			console.log("[Download] source tasks:", tasks.length, "currentTasks:", state.currentTasks?.length, "projectWorkspace:", state.projectWorkspace?.tasks?.length, "bootstrap:", state.bootstrap?.tasks?.length, "merged:", tasks.length);
 			const teamVal = (document.getElementById("downloadTeamFilter")?.value || "").toLowerCase().trim();
-			const projVal = (document.getElementById("downloadProjectFilter")?.value || "").toLowerCase().trim();
+			let projValRaw = (document.getElementById("downloadProjectFilter")?.value || "").trim();
+			let projVal = projValRaw.toLowerCase();
+			if (projValRaw && _projDisplayToName.has(projValRaw)) {
+				projVal = _projDisplayToName.get(projValRaw).toLowerCase();
+			} else if (projValRaw.includes("/")) {
+				const parts = projValRaw.split("/").map((s) => s.trim()).filter(Boolean);
+				const childPart = parts[parts.length - 1];
+				if (childPart) projVal = childPart.toLowerCase();
+			}
+			const projDisplayVal = projValRaw.toLowerCase();
 			const statusVal = (document.getElementById("downloadStatusFilter")?.value || "").toLowerCase().trim();
 			const fromVal = document.getElementById("downloadFromDate")?.value || "";
 			const toVal = document.getElementById("downloadToDate")?.value || "";
 			const filtered = tasks.filter((t) => {
 				if (teamVal && !(t.team || "").toLowerCase().includes(teamVal)) return false;
-				if (projVal && !(t.project || "").toLowerCase().includes(projVal) && !(t.project_title || "").toLowerCase().includes(projVal)) return false;
+				if (projVal) {
+					const p1 = (t.project || "").toLowerCase();
+					const p2 = (t.project_title || "").toLowerCase();
+					if (!p1.includes(projVal) && !p2.includes(projVal) && !p1.includes(projDisplayVal) && !p2.includes(projDisplayVal)) return false;
+				}
 				if (statusVal && !(t.status || "").toLowerCase().includes(statusVal)) return false;
 				// From/To filter on due_date or start_date or creation
 				const dateStr = (t.due_date || t.start_date || t.creation || "").slice(0, 10);
@@ -4577,8 +4603,15 @@ function getColumnCount() {
 					: state.bootstrap.projects || [];
 				projSelect.innerHTML = projectOptions
 					.map(
-						(p) =>
-							`<option value="${p.name}" ${p.name === currentProjName ? "selected" : ""}>${p.project_name}</option>`,
+						(p) => {
+							let displayName = p.project_name;
+							if (p.parent_project) {
+								const parentProj = state.bootstrap.projects.find((pp) => pp.name === p.parent_project);
+								const parentName = parentProj ? parentProj.project_name : p.parent_project;
+								displayName = `${parentName} / ${p.project_name}`;
+							}
+							return `<option value="${p.name}" ${p.name === currentProjName ? "selected" : ""}>${displayName}</option>`;
+						},
 					)
 					.join("");
 				projSelect.disabled = Boolean(currentProjName);
