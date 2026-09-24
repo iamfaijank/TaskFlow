@@ -1135,7 +1135,7 @@ function getColumnCount() {
 					if (typeof frappe !== "undefined" && frappe.show_alert) frappe.show_alert({ message: "No tasks match filters (0 tasks)", indicator: "orange" }, 3);
 					return;
 				}
-				const headers = ["task_title", "project", "team", "status", "priority", "task_type", "assigned_to", "start_date", "due_date", "description"];
+				const headers = ["team", "status", "project", "task_title", "priority", "task_type", "assigned_to", "start_date", "due_date", "description"];
 				const rows = [headers];
 				list.forEach((t) => {
 					rows.push(headers.map((h) => {
@@ -1166,7 +1166,7 @@ function getColumnCount() {
 					if (typeof frappe !== "undefined" && frappe.show_alert) frappe.show_alert({ message: "No tasks match filters", indicator: "orange" }, 3);
 					return;
 				}
-				const headers = ["task_title", "project", "team", "status", "priority", "task_type", "assigned_to", "start_date", "due_date", "description"];
+				const headers = ["team", "status", "project", "task_title", "priority", "task_type", "assigned_to", "start_date", "due_date", "description"];
 				const rows = [headers];
 				tasks.forEach((t) => {
 					rows.push(headers.map((h) => {
