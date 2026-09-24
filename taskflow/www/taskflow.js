@@ -905,17 +905,49 @@ function getColumnCount() {
 		let selectedBulkFile = null;
 		let lastBulkInsertResult = null;
 
+		const DOWNLOAD_STATUS_OPTIONS = ["Open","In Progress","Review","On Hold","Completed","Cancelled","Overdue"];
+		function initCustomSearchDropdown(inputId, dropdownId, getOptions) {
+			const input = document.getElementById(inputId);
+			const dropdown = document.getElementById(dropdownId);
+			if (!input || !dropdown) return;
+			function render(filter="") {
+				const opts = getOptions() || [];
+				const filtered = filter ? opts.filter((o) => o.toLowerCase().includes(filter.toLowerCase().trim())) : opts;
+				if (!filtered.length) {
+					dropdown.innerHTML = '<div class="custom-dropdown-empty">No results</div>';
+				} else {
+					dropdown.innerHTML = filtered.map((o) => `<div class="custom-dropdown-item" data-value="${o.replace(/"/g, '&quot;')}">${o}</div>`).join("");
+					dropdown.querySelectorAll(".custom-dropdown-item").forEach((el) => {
+						el.addEventListener("click", () => {
+							input.value = el.dataset.value;
+							dropdown.classList.remove("open");
+							updateDownloadPopupInfo();
+						});
+					});
+					// highlight selected
+					dropdown.querySelectorAll(".custom-dropdown-item").forEach((el) => {
+						if (el.dataset.value === input.value) el.classList.add("selected");
+					});
+				}
+			}
+			input.addEventListener("focus", () => { render(input.value); dropdown.classList.add("open"); });
+			input.addEventListener("input", () => { render(input.value); dropdown.classList.add("open"); updateDownloadPopupInfo(); });
+			input.addEventListener("click", () => { render(input.value); dropdown.classList.add("open"); });
+		}
 		function populateDownloadFilters() {
-			const teamList = document.getElementById("downloadTeamList");
-			const projList = document.getElementById("downloadProjectList");
-			if (teamList) {
-				const teams = (state.bootstrap && state.bootstrap.teams) || [];
-				teamList.innerHTML = teams.map((t) => `<option value="${t.name}"></option>`).join("") + teams.map((t) => t.team_name && t.team_name !== t.name ? `<option value="${t.team_name}"></option>` : "").join("");
-			}
-			if (projList) {
-				const projs = (state.bootstrap && state.bootstrap.projects) || [];
-				projList.innerHTML = projs.map((p) => `<option value="${p.name}"></option>`).join("") + projs.map((p) => p.project_name && p.project_name !== p.name ? `<option value="${p.project_name}"></option>` : "").join("");
-			}
+			const teams = (state.bootstrap && state.bootstrap.teams) || [];
+			const teamNames = [...new Set(teams.map((t) => t.name).concat(teams.map((t) => t.team_name).filter(Boolean)).filter(Boolean))];
+			const projs = (state.bootstrap && state.bootstrap.projects) || [];
+			const projNames = [...new Set(projs.map((p) => p.name).concat(projs.map((p) => p.project_name).filter(Boolean)).filter(Boolean))];
+			initCustomSearchDropdown("downloadTeamFilter", "downloadTeamDropdown", () => teamNames);
+			initCustomSearchDropdown("downloadProjectFilter", "downloadProjectDropdown", () => projNames);
+			initCustomSearchDropdown("downloadStatusFilter", "downloadStatusDropdown", () => DOWNLOAD_STATUS_OPTIONS);
+			// close dropdowns on outside click
+			document.addEventListener("click", (e) => {
+				if (!e.target.closest(".custom-select-wrapper")) {
+					document.querySelectorAll(".custom-dropdown.open").forEach((d) => d.classList.remove("open"));
+				}
+			});
 		}
 		function getFilteredTasksForDownload() {
 			let tasks = (state.currentTasks && state.currentTasks.length ? state.currentTasks : (state.projectWorkspace && state.projectWorkspace.tasks) || []);
@@ -1159,13 +1191,6 @@ function getColumnCount() {
 		});
 		downloadPopupModal?.addEventListener("click", (e) => {
 			if (e.target === downloadPopupModal) closeDownloadPopup();
-		});
-		["downloadTeamFilter","downloadProjectFilter","downloadStatusFilter"].forEach((id) => {
-			const el = document.getElementById(id);
-			if (el) {
-				el.addEventListener("input", updateDownloadPopupInfo);
-				el.addEventListener("change", updateDownloadPopupInfo);
-			}
 		});
 		["downloadFromDate","downloadToDate"].forEach((id) => {
 			document.getElementById(id)?.addEventListener("change", updateDownloadPopupInfo);
