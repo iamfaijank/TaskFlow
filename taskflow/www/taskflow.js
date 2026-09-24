@@ -5518,11 +5518,33 @@ function getColumnCount() {
 	async function closeIframeModal() {
 		const iframeModal = document.querySelector("[data-task-detail-iframe-backdrop]");
 		if (iframeModal && iframeModal.classList.contains("open")) {
-			toggleModal(iframeModal, false);
+			// Preserve loaded pagination (e.g., 40) so opening a record doesn't reset to 20
+			const prevTasks = state.projectWorkspace?.tasks ? [...state.projectWorkspace.tasks] : null;
+			const prevPage = state.projectTaskPage;
+			const prevHasMore = state.projectHasMore;
 			const iframe = document.getElementById("taskDetailIframe");
+			const taskName = iframe?.src ? new URL(iframe.src, window.location.origin).searchParams.get("task") : null;
+			toggleModal(iframeModal, false);
 			if (iframe) iframe.src = "about:blank";
 			await loadBootstrap(state.selectedProject, { updateUrl: false });
-			await loadStateFromUrl({ updateUrl: false });
+			// If we had loaded more than initial 20, restore it instead of resetting
+			if (prevTasks && prevTasks.length > 20 && state.projectWorkspace) {
+				if (taskName) {
+					try {
+						const detail = await apiCall("get_task_details", { task: taskName });
+						if (detail && detail.task) {
+							const idx = prevTasks.findIndex((t) => t.name === taskName);
+							if (idx !== -1) prevTasks[idx] = detail.task;
+						}
+					} catch (e) {}
+				}
+				state.projectWorkspace.tasks = prevTasks;
+				state.projectTaskPage = prevPage;
+				state.projectHasMore = prevHasMore;
+				renderProjectWorkspace();
+			} else {
+				await loadStateFromUrl({ updateUrl: false });
+			}
 		}
 	}
 	window.closeIframeModal = closeIframeModal;
