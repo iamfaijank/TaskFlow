@@ -906,33 +906,28 @@ function getColumnCount() {
 		let lastBulkInsertResult = null;
 
 		function populateDownloadFilters() {
-			const teamSel = document.getElementById("downloadTeamFilter");
-			const projSel = document.getElementById("downloadProjectFilter");
-			if (teamSel) {
+			const teamList = document.getElementById("downloadTeamList");
+			const projList = document.getElementById("downloadProjectList");
+			if (teamList) {
 				const teams = (state.bootstrap && state.bootstrap.teams) || [];
-				const currentVal = teamSel.value;
-				teamSel.innerHTML = '<option value="">All Teams</option>' + teams.map((t) => `<option value="${t.name}">${t.team_name || t.name}</option>`).join("");
-				teamSel.value = currentVal;
+				teamList.innerHTML = teams.map((t) => `<option value="${t.name}"></option>`).join("") + teams.map((t) => t.team_name && t.team_name !== t.name ? `<option value="${t.team_name}"></option>` : "").join("");
 			}
-			if (projSel) {
+			if (projList) {
 				const projs = (state.bootstrap && state.bootstrap.projects) || [];
-				const currentVal = projSel.value;
-				projSel.innerHTML = '<option value="">All Projects</option>' + projs.map((p) => `<option value="${p.name}">${p.project_name || p.name}</option>`).join("");
-				projSel.value = currentVal;
+				projList.innerHTML = projs.map((p) => `<option value="${p.name}"></option>`).join("") + projs.map((p) => p.project_name && p.project_name !== p.name ? `<option value="${p.project_name}"></option>` : "").join("");
 			}
 		}
 		function getFilteredTasksForDownload() {
 			let tasks = (state.currentTasks && state.currentTasks.length ? state.currentTasks : (state.projectWorkspace && state.projectWorkspace.tasks) || []);
-			// If bulk results exist and no filter selected, prefer bulk results? No, filters imply current tasks
-			const teamVal = document.getElementById("downloadTeamFilter")?.value || "";
-			const projVal = document.getElementById("downloadProjectFilter")?.value || "";
-			const statusVal = document.getElementById("downloadStatusFilter")?.value || "";
+			const teamVal = (document.getElementById("downloadTeamFilter")?.value || "").toLowerCase().trim();
+			const projVal = (document.getElementById("downloadProjectFilter")?.value || "").toLowerCase().trim();
+			const statusVal = (document.getElementById("downloadStatusFilter")?.value || "").toLowerCase().trim();
 			const fromVal = document.getElementById("downloadFromDate")?.value || "";
 			const toVal = document.getElementById("downloadToDate")?.value || "";
 			return tasks.filter((t) => {
-				if (teamVal && (t.team || "") !== teamVal) return false;
-				if (projVal && (t.project || "") !== projVal) return false;
-				if (statusVal && (t.status || "") !== statusVal) return false;
+				if (teamVal && !(t.team || "").toLowerCase().includes(teamVal)) return false;
+				if (projVal && !(t.project || "").toLowerCase().includes(projVal) && !(t.project_title || "").toLowerCase().includes(projVal)) return false;
+				if (statusVal && !(t.status || "").toLowerCase().includes(statusVal)) return false;
 				// From/To filter on due_date or start_date or creation
 				const dateStr = (t.due_date || t.start_date || t.creation || "").slice(0, 10);
 				if (fromVal && dateStr && dateStr < fromVal) return false;
@@ -1165,7 +1160,14 @@ function getColumnCount() {
 		downloadPopupModal?.addEventListener("click", (e) => {
 			if (e.target === downloadPopupModal) closeDownloadPopup();
 		});
-		["downloadTeamFilter","downloadProjectFilter","downloadStatusFilter","downloadFromDate","downloadToDate"].forEach((id) => {
+		["downloadTeamFilter","downloadProjectFilter","downloadStatusFilter"].forEach((id) => {
+			const el = document.getElementById(id);
+			if (el) {
+				el.addEventListener("input", updateDownloadPopupInfo);
+				el.addEventListener("change", updateDownloadPopupInfo);
+			}
+		});
+		["downloadFromDate","downloadToDate"].forEach((id) => {
 			document.getElementById(id)?.addEventListener("change", updateDownloadPopupInfo);
 		});
 
