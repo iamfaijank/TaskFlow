@@ -905,19 +905,59 @@ function getColumnCount() {
 		let selectedBulkFile = null;
 		let lastBulkInsertResult = null;
 
+		function populateDownloadFilters() {
+			const teamSel = document.getElementById("downloadTeamFilter");
+			const projSel = document.getElementById("downloadProjectFilter");
+			if (teamSel) {
+				const teams = (state.bootstrap && state.bootstrap.teams) || [];
+				const currentVal = teamSel.value;
+				teamSel.innerHTML = '<option value="">All Teams</option>' + teams.map((t) => `<option value="${t.name}">${t.team_name || t.name}</option>`).join("");
+				teamSel.value = currentVal;
+			}
+			if (projSel) {
+				const projs = (state.bootstrap && state.bootstrap.projects) || [];
+				const currentVal = projSel.value;
+				projSel.innerHTML = '<option value="">All Projects</option>' + projs.map((p) => `<option value="${p.name}">${p.project_name || p.name}</option>`).join("");
+				projSel.value = currentVal;
+			}
+		}
+		function getFilteredTasksForDownload() {
+			let tasks = (state.currentTasks && state.currentTasks.length ? state.currentTasks : (state.projectWorkspace && state.projectWorkspace.tasks) || []);
+			// If bulk results exist and no filter selected, prefer bulk results? No, filters imply current tasks
+			const teamVal = document.getElementById("downloadTeamFilter")?.value || "";
+			const projVal = document.getElementById("downloadProjectFilter")?.value || "";
+			const statusVal = document.getElementById("downloadStatusFilter")?.value || "";
+			const fromVal = document.getElementById("downloadFromDate")?.value || "";
+			const toVal = document.getElementById("downloadToDate")?.value || "";
+			return tasks.filter((t) => {
+				if (teamVal && (t.team || "") !== teamVal) return false;
+				if (projVal && (t.project || "") !== projVal) return false;
+				if (statusVal && (t.status || "") !== statusVal) return false;
+				// From/To filter on due_date or start_date or creation
+				const dateStr = (t.due_date || t.start_date || t.creation || "").slice(0, 10);
+				if (fromVal && dateStr && dateStr < fromVal) return false;
+				if (toVal && dateStr && dateStr > toVal) return false;
+				return true;
+			});
+		}
+		function updateDownloadPopupInfo() {
+			if (!downloadPopupInfo) return;
+			if (lastBulkInsertResult && !document.getElementById("downloadTeamFilter")?.value && !document.getElementById("downloadProjectFilter")?.value && !document.getElementById("downloadStatusFilter")?.value && !document.getElementById("downloadFromDate")?.value && !document.getElementById("downloadToDate")?.value) {
+				const c = lastBulkInsertResult.created_count ?? (lastBulkInsertResult.created_tasks?.length || 0);
+				const e = lastBulkInsertResult.error_count ?? (lastBulkInsertResult.errors?.length || 0);
+				downloadPopupInfo.innerHTML = `<b>${c} created</b> • <b>${e} errors</b> — Bulk Insert results<br><span style="font-size:11px;color:#64748b;">Filtered tasks: ${getFilteredTasksForDownload().length}</span>`;
+			} else {
+				const filtered = getFilteredTasksForDownload();
+				downloadPopupInfo.innerHTML = `<b>${filtered.length} tasks</b> matched filters<br><span style="font-size:11px;color:#64748b;">Will be exported as CSV</span>`;
+			}
+		}
 		function openDownloadPopup() {
 			if (!downloadPopupModal || !downloadPopupInfo) {
 				downloadBulkResults();
 				return;
 			}
-			if (lastBulkInsertResult) {
-				const c = lastBulkInsertResult.created_count ?? (lastBulkInsertResult.created_tasks?.length || 0);
-				const e = lastBulkInsertResult.error_count ?? (lastBulkInsertResult.errors?.length || 0);
-				downloadPopupInfo.innerHTML = `<b>${c} created</b> • <b>${e} errors</b><br><span style="font-size:12px;color:#64748b;">Bulk Insert results will be downloaded as CSV</span>`;
-			} else {
-				const tasks = (state.currentTasks?.length ? state.currentTasks : (state.projectWorkspace?.tasks || []));
-				downloadPopupInfo.innerHTML = `<b>${tasks.length} tasks</b> in current view<br><span style="font-size:12px;color:#64748b;">Will be exported as CSV</span>`;
-			}
+			populateDownloadFilters();
+			updateDownloadPopupInfo();
 			downloadPopupModal.classList.add("open");
 		}
 		function closeDownloadPopup() {
@@ -952,7 +992,8 @@ function getColumnCount() {
 		}
 
 		function downloadBulkResults() {
-			if (lastBulkInsertResult) {
+			const hasFilter = !!(document.getElementById("downloadTeamFilter")?.value || document.getElementById("downloadProjectFilter")?.value || document.getElementById("downloadStatusFilter")?.value || document.getElementById("downloadFromDate")?.value || document.getElementById("downloadToDate")?.value);
+			if (lastBulkInsertResult && !hasFilter) {
 				const data = lastBulkInsertResult;
 				const rows = [["Task Name", "Status", "Message"]];
 				if (Array.isArray(data.created_tasks)) {
@@ -977,18 +1018,18 @@ function getColumnCount() {
 				URL.revokeObjectURL(url);
 				return;
 			}
-			// Fallback: download current tasks in view as CSV (Download only without bulk insert)
-			const tasks = (state.currentTasks && state.currentTasks.length ? state.currentTasks : (state.projectWorkspace && state.projectWorkspace.tasks) || []);
+			// Filtered download: use filtered tasks
+			const tasks = getFilteredTasksForDownload();
 			if (!tasks.length) {
-				// fallback to template
-				document.getElementById("bulkGetTemplate")?.click();
+				// fallback to template if no tasks match
+				if (typeof frappe !== "undefined" && frappe.show_alert) frappe.show_alert({ message: "No tasks match filters", indicator: "orange" }, 3);
 				return;
 			}
 			const headers = ["task_title", "project", "team", "status", "priority", "task_type", "assigned_to", "start_date", "due_date", "description"];
 			const rows = [headers];
 			tasks.forEach((t) => {
 				rows.push(headers.map((h) => {
-					let v = t[h] ?? t[h.replace("task_title","task_title")] ?? "";
+					let v = t[h] ?? "";
 					if (Array.isArray(v)) v = v.join(";");
 					if (v && typeof v === "object") v = JSON.stringify(v);
 					return String(v).replace(/"/g, '""');
@@ -1123,6 +1164,9 @@ function getColumnCount() {
 		});
 		downloadPopupModal?.addEventListener("click", (e) => {
 			if (e.target === downloadPopupModal) closeDownloadPopup();
+		});
+		["downloadTeamFilter","downloadProjectFilter","downloadStatusFilter","downloadFromDate","downloadToDate"].forEach((id) => {
+			document.getElementById(id)?.addEventListener("change", updateDownloadPopupInfo);
 		});
 
 		bulkUploadArea?.addEventListener("click", () => bulkFileInput?.click());
