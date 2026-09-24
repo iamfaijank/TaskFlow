@@ -985,7 +985,11 @@ function getColumnCount() {
 			const statusVal = document.getElementById("downloadStatusFilter")?.value || "";
 			const fromVal = document.getElementById("downloadFromDate")?.value || "";
 			const toVal = document.getElementById("downloadToDate")?.value || "";
-			// If Status/From/To empty and no team/project filter, show all tasks count from server
+			// Until Team or Project is selected, don't show count
+			if (!teamVal && !projVal) {
+				downloadPopupInfo.innerHTML = `<span style="color:#94a3b8; font-size:12px;">Select Team or Project to see count</span>`;
+				return;
+			}
 			try {
 				const tasks = await apiCall("get_tasks_for_export", { team: teamVal, project: projVal, status: statusVal, from_date: fromVal, to_date: toVal });
 				const count = Array.isArray(tasks) ? tasks.length : 0;
@@ -999,6 +1003,14 @@ function getColumnCount() {
 				return;
 			} catch (e) {
 				// fallback to client
+				if (!teamVal && !projVal) {
+					downloadPopupInfo.innerHTML = `<span style="color:#94a3b8; font-size:12px;">Select Team or Project to see count</span>`;
+					return;
+				}
+			}
+			if (!teamVal && !projVal) {
+				downloadPopupInfo.innerHTML = `<span style="color:#94a3b8; font-size:12px;">Select Team or Project to see count</span>`;
+				return;
 			}
 			if (lastBulkInsertResult && !teamVal && !projVal && !statusVal && !fromVal && !toVal) {
 				const c = lastBulkInsertResult.created_count ?? (lastBulkInsertResult.created_tasks?.length || 0);
