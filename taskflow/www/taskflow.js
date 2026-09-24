@@ -78,6 +78,7 @@ function getColumnCount() {
 		calendarDate: new Date(),
 		calendarProject: "",
 		calendarMember: "",
+		collapsedProjects: new Set(JSON.parse(localStorage.getItem("taskflow_collapsed_projects") || "[]")),
 	};
 
 	const refs = {};
@@ -2090,9 +2091,12 @@ function getColumnCount() {
 		};
 		roots.sort(sortFn);
 		childrenMap.forEach((list) => list.sort(sortFn));
+		const isCollapsed = (name) => state.collapsedProjects.has(name);
 		const flat = [];
 		function addWithIndent(proj, depth) {
 			flat.push({ project: proj, depth });
+			// Only add children if parent not collapsed
+			if (isCollapsed(proj.name)) return;
 			const children = childrenMap.get(proj.name) || [];
 			children.forEach((child) => addWithIndent(child, depth + 1));
 		}
@@ -2110,8 +2114,12 @@ function getColumnCount() {
 				const indent = depth * 18;
 				const prefix = depth > 0 ? "↳ " : "";
 				const parentHint = depth > 0 ? ` (child of ${escapeHtml(project.parent_project)})` : "";
+				const hasChildren = childrenMap.has(project.name);
+				const collapsed = hasChildren && isCollapsed(project.name);
+				const toggleIcon = hasChildren ? (collapsed ? "▸" : "▾") : "";
 				return `
 					<div class="taskflow-project-item ${activeClass}" data-project-select="${escapeHtml(project.name)}" role="button" tabindex="0" style="margin-left:${indent}px; ${depth>0 ? 'border-left:2px solid #e2e8f0; padding-left:8px;' : ''}" title="${escapeHtml(project.project_name || project.name)}${parentHint}">
+						${hasChildren ? `<span class="taskflow-project-toggle" data-toggle-parent="${escapeHtml(project.name)}" style="display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; margin-right:4px; font-size:10px; color:#64748b; cursor:pointer; user-select:none; border-radius:4px; background:${collapsed ? '#f1f5f9' : 'transparent'};">${toggleIcon}</span>` : `<span style="width:18px; display:inline-block; margin-right:4px;"></span>`}
 						<div class="taskflow-project-icon" style="background: ${color}; ${depth>0 ? 'width:28px; height:28px; font-size:10px;' : ''}">${initialsStr}</div>
 						<span class="taskflow-project-name">${prefix}${escapeHtml(project.project_name || project.name)}</span>
 						${pendingCount > 0 ? `<span class="taskflow-badge">${pendingCount}</span>` : ""}
@@ -2120,8 +2128,25 @@ function getColumnCount() {
 			})
 			.join("");
 
+		refs.projectList.querySelectorAll("[data-toggle-parent]").forEach((toggle) => {
+			toggle.addEventListener("click", (e) => {
+				e.stopPropagation();
+				const parentName = toggle.dataset.toggleParent;
+				if (state.collapsedProjects.has(parentName)) {
+					state.collapsedProjects.delete(parentName);
+				} else {
+					state.collapsedProjects.add(parentName);
+				}
+				localStorage.setItem("taskflow_collapsed_projects", JSON.stringify([...state.collapsedProjects]));
+				renderProjectList();
+			});
+		});
 		refs.projectList.querySelectorAll("[data-project-select]").forEach((button) => {
-			button.addEventListener("click", () => selectProject(button.dataset.projectSelect));
+			// Don't trigger select when clicking toggle (handled above)
+			button.addEventListener("click", (e) => {
+				if (e.target.closest("[data-toggle-parent]")) return;
+				selectProject(button.dataset.projectSelect);
+			});
 			button.addEventListener("keydown", (event) => {
 				if (event.key !== "Enter" && event.key !== " ") return;
 				event.preventDefault();
