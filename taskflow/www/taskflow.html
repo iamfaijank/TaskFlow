@@ -1839,30 +1839,28 @@
 		<div class="taskflow-modal-body">
 			<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
 				<div>
-					<label style="display:block; font-size:11px; font-weight:600; color:#475569; margin-bottom:4px;">Team</label>
-					<select id="downloadTeamFilter" style="width:100%; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:13px; background:white;">
-						<option value="">All Teams</option>
-					</select>
+					<label style="display:block; font-size:11px; font-weight:600; color:#475569; margin-bottom:4px;">Team — search & select</label>
+					<input type="text" id="downloadTeamFilter" list="downloadTeamList" placeholder="Search team..." autocomplete="off" style="width:100%; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:13px; background:white;" />
+					<datalist id="downloadTeamList"></datalist>
 				</div>
 				<div>
-					<label style="display:block; font-size:11px; font-weight:600; color:#475569; margin-bottom:4px;">Project</label>
-					<select id="downloadProjectFilter" style="width:100%; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:13px; background:white;">
-						<option value="">All Projects</option>
-					</select>
+					<label style="display:block; font-size:11px; font-weight:600; color:#475569; margin-bottom:4px;">Project — search & select</label>
+					<input type="text" id="downloadProjectFilter" list="downloadProjectList" placeholder="Search project..." autocomplete="off" style="width:100%; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:13px; background:white;" />
+					<datalist id="downloadProjectList"></datalist>
 				</div>
 			</div>
 			<div style="margin-bottom: 12px;">
-				<label style="display:block; font-size:11px; font-weight:600; color:#475569; margin-bottom:4px;">Status</label>
-				<select id="downloadStatusFilter" style="width:100%; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:13px; background:white;">
-					<option value="">All Statuses</option>
-					<option value="Open">Open</option>
-					<option value="In Progress">In Progress</option>
-					<option value="Review">Review</option>
-					<option value="On Hold">On Hold</option>
-					<option value="Completed">Completed</option>
-					<option value="Cancelled">Cancelled</option>
-					<option value="Overdue">Overdue</option>
-				</select>
+				<label style="display:block; font-size:11px; font-weight:600; color:#475569; margin-bottom:4px;">Status — search & select</label>
+				<input type="text" id="downloadStatusFilter" list="downloadStatusList" placeholder="Search status..." autocomplete="off" style="width:100%; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:13px; background:white;" />
+				<datalist id="downloadStatusList">
+					<option value="Open"></option>
+					<option value="In Progress"></option>
+					<option value="Review"></option>
+					<option value="On Hold"></option>
+					<option value="Completed"></option>
+					<option value="Cancelled"></option>
+					<option value="Overdue"></option>
+				</datalist>
 			</div>
 			<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
 				<div>
