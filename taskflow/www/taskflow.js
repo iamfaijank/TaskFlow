@@ -950,8 +950,16 @@ function getColumnCount() {
 			});
 		}
 		function getFilteredTasksForDownload() {
-			let tasks = (state.currentTasks && state.currentTasks.length ? state.currentTasks : (state.projectWorkspace && state.projectWorkspace.tasks) || (state.bootstrap && state.bootstrap.tasks) || []);
-			console.log("[Download] source tasks:", tasks.length, "currentTasks:", state.currentTasks?.length, "projectWorkspace:", state.projectWorkspace?.tasks?.length, "bootstrap:", state.bootstrap?.tasks?.length);
+			// Use bootstrap.tasks (all visible projects, up to 100) as primary source so filtering by different project works
+			// when user is in project A but selects project B in popup, currentTasks/projectWorkspace only has A, so would show 0
+			let tasks = (state.bootstrap && state.bootstrap.tasks && state.bootstrap.tasks.length ? state.bootstrap.tasks : (state.projectWorkspace && state.projectWorkspace.tasks) || (state.currentTasks && state.currentTasks.length ? state.currentTasks : []));
+			// Also merge all sources to ensure we have all tasks (in case bootstrap is paginated)
+			const allTasksMap = new Map();
+			[state.bootstrap?.tasks, state.projectWorkspace?.tasks, state.currentTasks].forEach((arr) => {
+				(arr || []).forEach((t) => { if (t && t.name) allTasksMap.set(t.name, t); });
+			});
+			if (allTasksMap.size > tasks.length) tasks = Array.from(allTasksMap.values());
+			console.log("[Download] source tasks:", tasks.length, "currentTasks:", state.currentTasks?.length, "projectWorkspace:", state.projectWorkspace?.tasks?.length, "bootstrap:", state.bootstrap?.tasks?.length, "merged:", tasks.length);
 			const teamVal = (document.getElementById("downloadTeamFilter")?.value || "").toLowerCase().trim();
 			const projVal = (document.getElementById("downloadProjectFilter")?.value || "").toLowerCase().trim();
 			const statusVal = (document.getElementById("downloadStatusFilter")?.value || "").toLowerCase().trim();
